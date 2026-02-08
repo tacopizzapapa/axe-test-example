@@ -1,0 +1,120 @@
+name: Accessibility Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  accessibility-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: |
+          npm install --save-dev @playwright/test @axe-core/playwright
+          npx playwright install chromium
+      
+      - name: Extract URLs from PR description
+        id: extract-urls
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            
+            // Extract Before URL
+            const beforeMatch = body.match(/Before:\s*(.+)/i);
+            const beforeUrl = beforeMatch ? beforeMatch[1].trim() : '';
+            
+            // Extract After URL
+            const afterMatch = body.match(/After:\s*(.+)/i);
+            const afterUrl = afterMatch ? afterMatch[1].trim() : '';
+            
+            if (!beforeUrl || !afterUrl) {
+              core.setFailed('Could not find "Before: [url]" and "After: [url]" in PR description');
+              return;
+            }
+            
+            console.log('Before URL:', beforeUrl);
+            console.log('After URL:', afterUrl);
+            
+            core.setOutput('before-url', beforeUrl);
+            core.setOutput('after-url', afterUrl);
+      
+      - name: Run accessibility comparison
+        id: run-comparison
+        continue-on-error: true
+        run: |
+          node compare-accessibility-pr.js "${{ steps.extract-urls.outputs.before-url }}" "${{ steps.extract-urls.outputs.after-url }}"
+      
+      - name: Read comparison report
+        id: read-report
+        run: |
+          if [ -f accessibility-report.md ]; then
+            echo "REPORT<<EOF" >> $GITHUB_OUTPUT
+            cat accessibility-report.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "REPORT=No report generated" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = `${{ steps.read-report.outputs.REPORT }}`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Accessibility Check Results')
+            );
+            
+            const commentBody = report;
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: commentBody
+              });
+            }
+      
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-results
+          path: |
+            before-results.json
+            after-results.json
+            accessibility-report.md
+      
+      - name: Fail if new violations introduced
+        if: steps.run-comparison.outcome == 'failure'
+        run: |
+          echo "New accessibility violations were introduced"
+          exit 1

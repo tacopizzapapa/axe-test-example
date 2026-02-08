@@ -1,0 +1,16 @@
+{
+  "name": "axe-test-example",
+  "version": "0.1.0",
+  "description": "",
+  "license": "UNLICENSED",
+  "author": "Paul Michelotti",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
+    "@playwright/test": "^1.58.2"
+  }
+}
