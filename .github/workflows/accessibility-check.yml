@@ -54,22 +54,19 @@ jobs:
         run: |
           node compare-accessibility-pr.js "${{ steps.extract-urls.outputs.before-url }}" "${{ steps.extract-urls.outputs.after-url }}"
       
-      - name: Read comparison report
-        id: read-report
-        run: |
-          if [ -f accessibility-report.md ]; then
-            echo "REPORT<<EOF" >> $GITHUB_OUTPUT
-            cat accessibility-report.md >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "REPORT=No report generated" >> $GITHUB_OUTPUT
-          fi
-      
       - name: Comment on PR
         uses: actions/github-script@v7
         with:
           script: |
-            const report = `${{ steps.read-report.outputs.REPORT }}`;
+            const fs = require('fs');
+            
+            // Read the report file directly
+            let report;
+            try {
+              report = fs.readFileSync('accessibility-report.md', 'utf8');
+            } catch (error) {
+              report = '❌ Failed to generate accessibility report. Check the workflow logs for details.';
+            }
             
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
@@ -83,15 +80,13 @@ jobs:
               comment.body.includes('Accessibility Check Results')
             );
             
-            const commentBody = report;
-            
             if (botComment) {
               // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: botComment.id,
-                body: commentBody
+                body: report
               });
             } else {
               // Create new comment
@@ -99,7 +94,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
-                body: commentBody
+                body: report
               });
             }
       
