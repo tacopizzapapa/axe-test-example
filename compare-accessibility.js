@@ -1,6 +1,6 @@
-const { chromium } = require('playwright');
-const AxeBuilder = require('@axe-core/playwright').default;
-const fs = require('fs');
+import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
+import { writeFileSync, readFileSync } from 'fs';
 
 async function runAccessibilityScan(url, outputFile) {
   const browser = await chromium.launch();
@@ -14,7 +14,7 @@ async function runAccessibilityScan(url, outputFile) {
     .analyze();
   
   // Save results to file
-  fs.writeFileSync(outputFile, JSON.stringify(results, null, 2));
+  writeFileSync(outputFile, JSON.stringify(results, null, 2));
   
   await browser.close();
   
@@ -22,8 +22,8 @@ async function runAccessibilityScan(url, outputFile) {
 }
 
 async function compareResults(beforeFile, afterFile) {
-  const before = JSON.parse(fs.readFileSync(beforeFile, 'utf8'));
-  const after = JSON.parse(fs.readFileSync(afterFile, 'utf8'));
+  const before = JSON.parse(readFileSync(beforeFile, 'utf8'));
+  const after = JSON.parse(readFileSync(afterFile, 'utf8'));
   
   // Create violation maps for easier comparison
   const beforeViolations = new Map(

@@ -1,0 +1,123 @@
+name: Visual Comparison
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  visual-comparison:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: .github/scripts
+        run: |
+          npm install
+          npx playwright install chromium
+      
+      - name: Extract URLs from PR description
+        id: extract-urls
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            
+            // Extract Before URL
+            const beforeMatch = body.match(/Before:\s*(.+)/i);
+            const beforeUrl = beforeMatch ? beforeMatch[1].trim() : '';
+            
+            // Extract After URL
+            const afterMatch = body.match(/After:\s*(.+)/i);
+            const afterUrl = afterMatch ? afterMatch[1].trim() : '';
+            
+            if (!beforeUrl || !afterUrl) {
+              core.setFailed('Could not find "Before: [url]" and "After: [url]" in PR description');
+              return;
+            }
+            
+            console.log('Before URL:', beforeUrl);
+            console.log('After URL:', afterUrl);
+            
+            core.setOutput('before-url', beforeUrl);
+            core.setOutput('after-url', afterUrl);
+      
+      - name: Run visual comparison
+        working-directory: .github/scripts
+        run: |
+          node visual-comparison.js "${{ steps.extract-urls.outputs.before-url }}" "${{ steps.extract-urls.outputs.after-url }}"
+      
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-comparison
+          path: .github/scripts/visual-comparison/
+          retention-days: 30
+      
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read the report file
+            let report;
+            try {
+              report = fs.readFileSync('.github/scripts/visual-comparison-report.md', 'utf8');
+              
+              // Update artifact links to point to the correct location
+              const runId = context.runId;
+              const repo = context.repo;
+              const artifactUrl = `https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId}`;
+              
+              // Replace relative links with absolute artifact links
+              report = report.replace(/\[([^\]]+)\]\(\.\.\/artifacts\/visual-comparison\/([^)]+)\)/g, 
+                `[$1](${artifactUrl}#artifacts) *(Download "visual-comparison" artifact)*`);
+              
+            } catch (error) {
+              report = '❌ Failed to generate visual comparison report. Check the workflow logs for details.';
+            }
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Visual Comparison Report')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: report
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: report
+              });
+            }

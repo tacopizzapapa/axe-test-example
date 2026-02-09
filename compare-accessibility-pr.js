@@ -1,6 +1,6 @@
-const { chromium } = require('playwright');
-const AxeBuilder = require('@axe-core/playwright').default;
-const fs = require('fs');
+import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
+import { writeFileSync, readFileSync } from 'fs';
 
 async function runAccessibilityScan(url, outputFile) {
   const browser = await chromium.launch();
@@ -13,7 +13,7 @@ async function runAccessibilityScan(url, outputFile) {
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   
-  fs.writeFileSync(outputFile, JSON.stringify(results, null, 2));
+  writeFileSync(outputFile, JSON.stringify(results, null, 2));
   
   await browser.close();
   
@@ -21,8 +21,8 @@ async function runAccessibilityScan(url, outputFile) {
 }
 
 async function compareResults(beforeFile, afterFile) {
-  const before = JSON.parse(fs.readFileSync(beforeFile, 'utf8'));
-  const after = JSON.parse(fs.readFileSync(afterFile, 'utf8'));
+  const before = JSON.parse(readFileSync(beforeFile, 'utf8'));
+  const after = JSON.parse(readFileSync(afterFile, 'utf8'));
   
   const beforeViolations = new Map(
     before.violations.map(v => [v.id, v])
@@ -158,7 +158,7 @@ async function main() {
   const markdown = generateMarkdownReport(comparison, beforeUrl, afterUrl);
   
   // Write to file for GitHub Action to read
-  fs.writeFileSync(outputFile, markdown);
+  writeFileSync(outputFile, markdown);
   
   console.log(`Report written to ${outputFile}`);
   

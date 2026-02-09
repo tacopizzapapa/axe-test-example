@@ -62,3 +62,7 @@ coverage/
 
 # Optional eslint cache
 .eslintcache
+
+# Visual comparison outputs
+visual-comparison/
+visual-comparison-report.md

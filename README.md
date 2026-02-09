@@ -45,3 +45,29 @@ The GitHub Action will:
 ## Limitations
 
 Automated accessibility testing catches approximately 57% of WCAG issues. Manual testing with assistive technologies is still essential for comprehensive coverage.
+
+## Visual Comparison Testing
+
+Visual regression testing runs automatically on pull requests to detect unintended UI changes.
+
+### How It Works
+
+Include URLs in your PR description:
+```
+Before: https://staging-before.example.com
+After: https://staging-after.example.com
+```
+
+The workflow will:
+1. Take screenshots at three breakpoints (mobile, laptop, desktop)
+2. Compare before and after versions
+3. Highlight any visual differences
+4. Post results as a PR comment
+
+### Reviewing Results
+
+- ✅ **No Changes** - Pages render identically
+- 🟡 **Minor Differences** - Small variations (< 0.1%), likely rendering differences
+- 🔴 **Changes Detected** - Significant visual changes to review
+
+Download full-resolution screenshots from the workflow artifacts to inspect changes in detail.
